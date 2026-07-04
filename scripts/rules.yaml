@@ -1,0 +1,108 @@
+# Output Check Rules — External Truth Layer
+#
+# This is a SAMPLE rules file. Customize it with YOUR own rules.
+# Each rule anchors to a verifiable, objective standard — not subjective quality.
+# Design principle: only include rules that can be checked against objective
+# references (format, compliance, factual grounding, consistency).
+# "Deep domain correctness" goes to human review, not here.
+#
+# Format: YAML. Each rule has: enabled, severity (NO-GO or FLAG), and rule-specific fields.
+# Severity: NO-GO = block (hard fail) / FLAG = warn (soft reminder)
+
+version: 2
+
+# ── 1. Traditional Chinese detection ──
+# If you write in Simplified Chinese and want to catch accidental Traditional chars.
+# Requires: pip install opencc-python-reimplemented
+traditional_chinese:
+  enabled: true
+  severity: NO-GO
+  note: "Content should be in Simplified Chinese."
+
+# ── 2. Forbidden words ──
+# Words that must never appear in your published content.
+# Replace these examples with your own.
+forbidden_words:
+  enabled: true
+  severity: NO-GO
+  words:
+    - example-forbidden-word
+  # Custom terms specific to your use case
+  custom_terms: []
+  # Example (uncomment and customize):
+  # custom_terms:
+  #   - my-home-address
+  #   - my-real-name
+
+# ── 3. File path safety ──
+# Warn if the AI suggests saving work files to non-standard locations.
+# Customize the paths to match your directory structure.
+file_path:
+  enabled: true
+  severity: FLAG
+  # Words that trigger a path check
+  triggers:
+    - save to
+    - 存到
+    - 保存到
+    - write to
+    - 存盘
+  # Paths that should NOT be used for work files
+  suspicious_path_hints:
+    - Desktop
+    - 桌面
+    - /tmp
+    - Downloads
+    - 下载
+  note: "Work files should go to a designated project directory."
+
+# ── 4. Volatile facts: model names, versions, prices ──
+# LLMs memorize model names from training data, which are always outdated.
+# Flag known-stale names and "latest/current" claims without disclaimers.
+volatile_facts:
+  enabled: true
+  severity: FLAG
+  note: "Model names/versions/prices change monthly. Don't rely on training memory."
+  # Known-stale model names (if these appear, it's likely memory drift)
+  # Replace with names that were current when YOUR model was trained
+  stale_names:
+    - gpt-4o
+    - gpt-4-turbo
+    - claude-3-5
+    - claude-3.5
+    - deepseek-v3
+  # Hint for what's actually current (update periodically)
+  current_hint: "Check official docs for latest model names"
+  # Words that trigger a disclaimer requirement
+  needs_disclaimer_when:
+    - 最新
+    - 目前
+    - 现在
+    - 当前
+    - latest
+    - current
+
+# ── 5. Weekday claims ──
+# LLMs can't reliably compute weekdays. Flag any weekday mention for verification.
+weekday_claim:
+  enabled: true
+  severity: FLAG
+  note: "Weekday claims must be verified with datecheck.py, not inferred."
+  patterns:
+    - '周[一二三四五六日天]'
+    - '星期[一二三四五六日天]'
+    - 'Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday'
+
+# ── 6. Time distance claims ──
+# "A few months ago" / "last week" — must be computed, not guessed.
+time_distance:
+  enabled: true
+  severity: FLAG
+  note: "Time distances must be calculated from actual dates, not semantic feel."
+  patterns:
+    - '[几好]个月前'
+    - '上[周个]'
+    - '前[几阵]'
+    - 'months ago'
+    - 'last week'
+    - 'a few days ago'
