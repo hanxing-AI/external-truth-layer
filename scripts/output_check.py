@@ -101,6 +101,26 @@ def check_pattern_rule(text, rule, label):
     return findings
 
 
+def check_lethal_trifecta(text, rule):
+    """Check if output simultaneously touches all three risk categories."""
+    import re as _re
+    cats = {
+        "private data": rule.get("private_data_patterns", []),
+        "untrusted content": rule.get("untrusted_content_patterns", []),
+        "external send": rule.get("external_send_patterns", []),
+    }
+    hits = {}
+    for label, patterns in cats.items():
+        for pat in patterns:
+            if _re.search(pat, text, _re.IGNORECASE):
+                hits[label] = pat
+                break
+    if len(hits) == 3:
+        return [(rule["severity"], "lethal-trifecta",
+                 f"All three risk categories present: {dict(hits)} — {rule.get('note', '')}")]
+    return []
+
+
 def run_checks(text):
     rules = load_rules()
     findings = []
@@ -111,6 +131,7 @@ def run_checks(text):
         "volatile_facts":      lambda r: check_volatile(text, r),
         "weekday_claim":       lambda r: check_pattern_rule(text, r, "weekday-claim"),
         "time_distance":       lambda r: check_pattern_rule(text, r, "time-distance"),
+        "lethal_trifecta":     lambda r: check_lethal_trifecta(text, r),
     }
     for key, fn in dispatch.items():
         rule = rules.get(key)

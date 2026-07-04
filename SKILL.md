@@ -6,18 +6,21 @@ description: >-
   itself is ineffective for capability errors because blind spots are correlated.
   Solution: compare against objective references, triage errors by type, and
   use a different model family as verifier to decorrelate blind spots.
-  Includes date calculator, fact lookup, format compliance checker, and a
-  two-tier GO/NO-GO/ESCALATE verification gate.
+  Includes feedforward pre-check, date calculator, fact lookup, format compliance
+  checker, two-tier GO/NO-GO/ESCALATE verification gate, and failure pattern
+  collection for self-improvement.
 when_to_use: |-
   Any scenario requiring "verify / check / confirm" — date claims, fact
   references, pre-publish compliance, irreversible action decisions. Especially
   when you know the current model isn't strong, or when you feel "probably fine
   but should check" — that feeling is the signal to use this.
 triggers: |-
+  Before generating → precheck.py (feedforward guidance)
   Date/weekday claims → datecheck.py
   Static fact lookup → factlookup.sh
   Pre-publish format check → output_check.py
   Irreversible/external output → gate.py
+  After repeated failures → collect_failures.py (weakness mining)
 ---
 
 # External Truth Layer
@@ -32,11 +35,49 @@ wave each other through. Real verification requires two things:
 1. **Compare against external references** (fact bases, tests, specs, rules) → deterministic judgment
 2. **Triage by error type + use a different model family as verifier** → decorrelate blind spots
 
+## Two Types of Control
+
+Drawing from Birgitta Böckeler's harness engineering framework, this toolkit
+implements two types of control:
+
+| Type | What it means | This toolkit's implementation |
+|------|--------------|-------------------------------|
+| **Computational controls** | Non-black-and-white checks with objective answers (linter, unit test, pattern match) | Level 1 of gate.py, output_check.py, datecheck.py, precheck.py |
+| **Inferential controls** | Checks that involve probability and judgment (another model as judge) | Level 2 of gate.py (cross-family verifier) |
+
+The key insight: computational controls are reliable even with weak models
+because the answer is deterministic. Inferential controls add value only when
+the verifier is from a different model family (decorrelated blind spots).
+Mixing both — and knowing which is which — is what makes the gate effective.
+
+## Two Directions of Control
+
+| Direction | When it runs | Purpose | This toolkit |
+|-----------|-------------|---------|--------------|
+| **Feedforward** | Before generation | Guide the model away from known risk patterns | precheck.py |
+| **Feedback** | After generation | Catch errors the model already made | output_check.py, gate.py |
+
+A complete harness needs both. Feedforward prevents errors proactively;
+feedback catches what slips through.
+
 ## Tool Chain
 
 All scripts live in `scripts/` alongside this SKILL.md.
 
-### 1. datecheck.py — Deterministic Date Calculation
+### 1. precheck.py — Feedforward Pre-Check
+
+**When to run**: BEFORE starting work on a task, scan the task description
+for known risk patterns.
+
+```bash
+python3 scripts/precheck.py --task "Write about next Wednesday's deadline and the latest GPT model"
+# Output: ⚠️ 2 risk patterns detected: weekday-claim, volatile-facts
+```
+
+This is advisory only — it never blocks. It alerts the model to risks it
+should watch for during generation, using the same rules.yaml as output_check.py.
+
+### 2. datecheck.py — Deterministic Date Calculation
 
 **When to run**: whenever you write "Wednesday", "X months ago", "X days from now".
 
@@ -49,26 +90,20 @@ python3 scripts/datecheck.py --since 2026-06-26
 python3 scripts/datecheck.py --next-weekday 3        # 3=Wednesday
 ```
 
-**Rule**: dates are computed by code, never by inference. Never say "Wednesday"
-or "a few months ago" based on reasoning.
+**Rule**: dates are computed by code, never by inference.
 
-### 2. factlookup.sh — Fact Base Search
+### 3. factlookup.sh — Fact Base Search
 
 **When to run**: when answering questions about stored facts (names, configs, project details).
 
 ```bash
-# Set your fact directory (default: ~/.local/fact-base)
 export FACT_DIR=~/my-fact-base
-
 bash scripts/factlookup.sh "keyword"
 bash scripts/factlookup.sh --list     # list all fact files
 bash scripts/factlookup.sh --index    # print index file
 ```
 
-**Why**: many agent frameworks store facts in hidden directories that built-in
-search tools skip. This wraps grep to reliably find them.
-
-### 3. output_check.py — Format Compliance Checker
+### 4. output_check.py — Format Compliance Checker
 
 **When to run**: before publishing or delivering any content.
 
@@ -79,9 +114,11 @@ echo "text" | python3 scripts/output_check.py --json
 ```
 
 Rules are in `scripts/rules.yaml` — **customize them with your own rules**.
-Each rule anchors to an objective, verifiable standard.
+Includes checks for: traditional Chinese, forbidden words, file path safety,
+volatile facts (stale model names), weekday claims, time distance claims,
+and lethal trifecta (dangerous capability combinations).
 
-### 4. gate.py — Two-Tier Verification Gate
+### 5. gate.py — Two-Tier Verification Gate
 
 **When to run**: for irreversible or external outputs (publishing, config changes, releases).
 
@@ -92,12 +129,9 @@ python3 scripts/gate.py --draft draft.md --skip-model   # Level 1 only
 ```
 
 **Two tiers**:
-- **Level 1**: Deterministic (no model) — scans for known error patterns
-  (date claims without verification, fact references without sources,
-  traditional/simplified mixing, stale model names, banned words)
-- **Level 2**: Cross-family model — uses a different model family
-  (configurable via `VERIFIER_API_KEY`, `VERIFIER_BASE_URL`, `VERIFIER_MODEL`
-  environment variables) to adjudicate against reference materials
+- **Level 1 (Computational)**: Deterministic (no model) — scans for known error patterns
+- **Level 2 (Inferential)**: Cross-family model — uses a different model family
+  to adjudicate against reference materials
 
 **Three verdicts** (strict):
 - **GO** = Every claim is supported by references, no conflicts → pass
@@ -107,6 +141,22 @@ python3 scripts/gate.py --draft draft.md --skip-model   # Level 1 only
 **The key insight "ESCALATE"**: "Can't verify" is ALWAYS ESCALATE, never NO-GO
 and never silent GO. This prevents the most dangerous error — pretending to
 judge is worse than being wrong.
+
+### 6. collect_failures.py — Failure Pattern Collection (Self-Harness)
+
+**When to run**: periodically, to detect your most common failure patterns
+and improve rules.yaml over time.
+
+```bash
+python3 scripts/collect_failures.py --log gate_history.jsonl
+python3 scripts/collect_failures.py --log gate_history.jsonl --top 5
+```
+
+Inspired by the Self-Harness framework (weakness mining → proposal → validation).
+This script does the mining half: it collects gate.py run results, tallies
+which rules are most frequently violated, and outputs a ranked report with
+recommendations. It does NOT auto-modify rules.yaml — it gives you data to
+decide what to strengthen.
 
 ## Environment Variables
 
@@ -121,7 +171,7 @@ judge is worse than being wrong.
 ## Dependencies
 
 - **Python 3** (all scripts)
-- **pyyaml** — for output_check.py and gate.py (`pip install pyyaml`)
+- **pyyaml** — for output_check.py, gate.py, precheck.py (`pip install pyyaml`)
 - **opencc-python-reimplemented** — optional, for Traditional Chinese detection (`pip install opencc-python-reimplemented`)
 
 ## How to Customize
@@ -132,6 +182,8 @@ judge is worse than being wrong.
    set `VERIFIER_*` to a model from a different family than your primary model.
 3. **Add your own fact base** — create markdown files with structured facts
    that `factlookup.sh` can search.
+4. **Collect failures regularly** — run `collect_failures.py` on your gate.py
+   history to find your most common patterns, then strengthen rules.yaml.
 
 ## Relationship to Other Systems
 
@@ -143,4 +195,4 @@ This skill is model-agnostic and framework-agnostic. It works with:
 - Any system that can run shell scripts
 
 The core methodology — "use deterministic code instead of model self-checks,
-triage errors by type, cross-family verification" — is universal.
+triage errors by type, cross-family verification, feedforward + feedback" — is universal.

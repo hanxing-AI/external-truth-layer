@@ -106,3 +106,37 @@ time_distance:
     - 'months ago'
     - 'last week'
     - 'a few days ago'
+
+# ── 7. Lethal trifecta (lethal combination of capabilities) ──
+# From MCP protocol team: an agent that simultaneously has (a) access to private
+# data, (b) contact with untrusted content, and (c) ability to send external
+# messages, has risk that multiplies, not adds. Flag when all three appear in
+# the same output.
+lethal_trifecta:
+  enabled: true
+  severity: FLAG
+  note: "Output simultaneously touches private data, untrusted content, and external sending. Risk multiplies, not adds."
+  # Category A: access to private/sensitive data
+  private_data_patterns:
+    - 'password|passwd|密码'
+    - 'api.?key|secret|token|密钥'
+    - 'credit.?card|银行卡|信用卡'
+    - 'private.?key|私钥'
+    - 'database|数据库|SQL'
+    - 'personal.?data|个人信息|隐私'
+  # Category B: contact with untrusted/external content
+  untrusted_content_patterns:
+    - 'url|链接|http'
+    - 'webpage|网页|scrape'
+    - 'email|邮件'
+    - 'upload|上传'
+    - 'download|下载'
+    - 'user.?input|用户输入'
+  # Category C: ability to send external messages
+  external_send_patterns:
+    - 'send|发送|send.?message'
+    - 'post|publish|发布'
+    - 'webhook|callback'
+    - 'email|邮件'
+    - 'api.?request|请求'
+    - 'forward|转发'

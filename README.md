@@ -21,10 +21,12 @@ Four tools that shift verification from "model judgment" to "deterministic code 
 
 | Tool | What it does | Needs a model? |
 |------|-------------|----------------|
+| `precheck.py` | Scans task description for known risk patterns BEFORE generation (feedforward) | No |
 | `datecheck.py` | Computes weekdays and time distances using Python datetime | No |
 | `factlookup.sh` | Searches a local fact/knowledge base via grep | No |
-| `output_check.py` | Checks format compliance (traditional chars, banned words, stale model names, weekday claims) | No |
+| `output_check.py` | Checks format compliance (traditional chars, banned words, stale model names, weekday claims, lethal trifecta) | No |
 | `gate.py` | Two-tier verification gate: deterministic Level 1 + cross-family model Level 2 | Level 2 only |
+| `collect_failures.py` | Collects gate.py run history, tallies most common failure patterns, recommends rule improvements | No |
 
 ### The Three Verdicts (gate.py)
 
@@ -111,16 +113,21 @@ external-truth-layer/
 ├── LICENSE                 ← MIT
 ├── .gitignore
 └── scripts/
+    ├── precheck.py         ← Feedforward pre-check (run before generation)
     ├── datecheck.py        ← Deterministic date/weekday calculator
     ├── factlookup.sh       ← Fact base grep wrapper
     ├── output_check.py     ← Format compliance checker
     ├── gate.py             ← Two-tier verification gate
-    └── rules.yaml          ← Rules for output_check.py (customize this!)
+    ├── collect_failures.py ← Failure pattern collection (self-improvement)
+    └── rules.yaml          ← Rules for all checkers (customize this!)
 ```
 
 ## Quick Start
 
 ```bash
+# Pre-check a task for known risks (before generation)
+python3 scripts/precheck.py --task "Write about next Wednesday and the latest model prices"
+
 # Check a date
 python3 scripts/datecheck.py 2026-07-04
 
@@ -132,6 +139,9 @@ python3 scripts/gate.py --draft my-article.md --refs "known facts and constraint
 
 # Gate with deterministic layer only (no model needed)
 python3 scripts/gate.py --draft my-article.md --skip-model
+
+# Analyze your most common failure patterns
+python3 scripts/collect_failures.py --log gate_history.jsonl
 ```
 
 ## Why This Matters
@@ -142,6 +152,19 @@ This toolkit is particularly valuable when:
 - Running on a weaker/local model and wanting stronger-model-quality verification
 - Publishing content where errors are costly (public posts, config changes, releases)
 - Working with dates, facts, or compliance requirements where deterministic checks exist
+
+## Further Reading
+
+This toolkit is part of a broader conversation about "harness engineering" —
+the scaffolding around an AI model that determines whether it succeeds or
+fails on real tasks. Key resources:
+
+- **Anthropic, "Building Effective Agents"** — distinguishing workflows from agents, and when to use each
+- **LangChain / Vivek Trivedy, "The Anatomy of an Agent Harness"** — the five primitives of a harness (filesystem, code execution, sandbox, memory, context management)
+- **Addy Osmani, "Agent Harness Engineering"** — the "Agent = Model + Harness" formula: "A decent model with a great harness beats a great model with a bad harness"
+- **Birgitta Böckeler (martinfowler.com)** — computational vs inferential controls, feedforward vs feedback, the "cybernetic governor" metaphor
+- **awesome-harness-engineering (GitHub)** — curated collection of harness engineering resources covering tools, patterns, evaluation, memory, permissions, and observability
+- **Self-Harness (Shanghai AI Lab)** — agents that detect their own failure patterns and propose harness improvements autonomously
 
 ## Acknowledgments
 
